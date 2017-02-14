@@ -1,0 +1,67 @@
+==================================================================
+https://keybase.io/sheurich
+--------------------------------------------------------------------
+
+I hereby claim:
+
+  * I am an admin of https://heurich.com
+  * I am sheurich (https://keybase.io/sheurich) on keybase.
+  * I have a public key with fingerprint 68C2 8C47 675C 66A9 F447  92F1 F727 2011 9716 4F03
+
+To do so, I am signing this object:
+
+{
+    "body": {
+        "key": {
+            "eldest_kid": "0101c24f2bab9949e01d4440d6be09e7d03f73d6dda55c13e192a60318a6dca693fb0a",
+            "fingerprint": "68c28c47675c66a9f44792f1f727201197164f03",
+            "host": "keybase.io",
+            "key_id": "f727201197164f03",
+            "kid": "01018c2823ab016df1f07abaaf1b3ef6c841b82f788022dadb6dabc17ca5e73a552d0a",
+            "uid": "6938c47a8360569b0c99b6975b197400",
+            "username": "sheurich"
+        },
+        "service": {
+            "hostname": "heurich.com",
+            "protocol": "https:"
+        },
+        "type": "web_service_binding",
+        "version": 1
+    },
+    "ctime": 1487101186,
+    "expire_in": 157680000,
+    "prev": "e77ac6292f41baf12a15798c66c667c5bfe9b00c5a67e7d649006ed9fabcedfe",
+    "seqno": 47,
+    "tag": "signature"
+}
+
+which yields the signature:
+
+-----BEGIN PGP MESSAGE-----
+
+owFtUltsDUEYPset6aGuERqXyLpTNbOXmZ0jaar0gReSvhTlmNu2m9bucS6ljkvb
+VNyDpPRBkPIgISQSJ26pUBLikpAQRDyQFC1CqlKCMNtUvNhsspnZ7/v+7/tmDuQN
+DEXCx15tK+mODmkJ3+tkofKTq4dlNOaLOi2a0apl30fWCJlMxapdoUU1AAHkuuno
+jDJCTCIBFKZpAoGYBERiAQwHGwIJQS2LQ0NColMEDGhTJDhFxHAYoFqB5rhepUzE
+E66XUrLI5rrNTYywxRGixDFNTHQHOljHOoCQYIhMBxiKWOUnA4Yyx2hSFrq+2lOL
+WJ+9/+D/+Q5m6AZlACKhpAGmjFIHMkM6iNsmZLbuYNsGui6oYEhQxiHm1JLYUGF0
+0ec73SencgR2qW0gYCHCACeEIYItpkabAATApEx4dJ1U6GSVTCdcXqVtKdDUbq3L
+ZVBskKQf0Q8o5P46RY0n/JTP/ZrgRyoVT0YDYqouHiA3SBbr14gx1xOqRsWolYmk
+63taFCokT7mBKDRtrFJDGxVocmPcTciYGyAsjGygnmCOrFWSEmPKkU7KdUeVoBrR
+qQIRW52EejG3mCNVRMAtirA6YmQSAJAUxFENSeFILYi13vO1qImVUVoZZHYrPZpK
+J6S2JbIrPHFQKBwJDRk8ILhhoUjuyL/XbsTZnF9j503oSLe9jsw5vuhWQUt3odZR
+admPFl9ZcLdn6bEvn07eKDk8pWPNrw/L90yflnPb781L/9j68WXRg/qOMQ+Wefe3
+bVpf8fWbU6Q/nHjxyvvSnFz49ulao/l0dmznvrf1l8aVzqjIdq30ykBzq9nbi/C5
+qeeH4sfPm64+y7YvMIbeyl9llIweVdeQeTdg4fhT119332v8XXTwB5k/M352RXWV
+ALn3S15mSq/n72i6tnbG/uZD1XL2+C/D5v3satz54tJya27nkc81d4qfZJPvwjtk
+YXl7ZqU5+ejT4q4zz5ZsPtVQW3b5fDNqb5sEHr7YvjTbWlah3bzQ83z4rO9dd0/s
+bXuzO/8P
+=kD6l
+-----END PGP MESSAGE-----
+
+And finally, I am proving ownership of this host by posting or
+appending to this document.
+
+View my publicly-auditable identity here: https://keybase.io/sheurich
+
+==================================================================
