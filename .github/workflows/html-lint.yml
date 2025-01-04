@@ -1,0 +1,28 @@
+name: HTML Lint
+
+on:
+  push:
+    paths:
+      - '**/*.html'
+  pull_request:
+    paths:
+      - '**/*.html'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'latest'
+        
+    - name: Install html-validate
+      run: npm install -g html-validate
+      
+    - name: Run HTML lint
+      run: |
+        find . -name "*.html" -type f -exec html-validate {} +
