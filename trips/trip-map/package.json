@@ -1,0 +1,44 @@
+{
+  "name": "trip-map",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "prepare": "husky install",
+    "gen-manifest": "node scripts/generate-photos.js",
+    "dev": "vite",
+    "build": "npm run gen-manifest && vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "autoprefixer": "^10.0.0",
+    "eslint": "^8.0.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0",
+    "postcss": "^8.0.0",
+    "rollup": "^4.40.1",
+    "tailwindcss": "^3.0.0",
+    "vite": "^4.0.0"
+  },
+  "dependencies": {
+    "exifr": "^7.0.0",
+    "leaflet": "^1.9.0",
+    "leaflet-timedimension": "^1.1.0",
+    "leaflet-markercluster": "^1.5.0"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "git add"
+    ],
+    "*.css": [
+      "stylelint --fix",
+      "git add"
+    ]
+  }
+}

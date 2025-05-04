@@ -1,0 +1,32 @@
+# Node.js dependencies (root and all sub‑folders)
+**/node_modules/
+
+# Build outputs
+dist/
+trips/trip-map/dist/
+
+# Generated manifest
+trips/trip-map/photos.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Local env files
+.env
+.env.*.local
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Jekyll (if your site uses Jekyll)
+_site/
+.sass-cache/
+.jekyll-metadata
+
+# Coverage reports, test output, etc.
+coverage/
