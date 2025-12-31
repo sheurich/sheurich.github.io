@@ -15,6 +15,7 @@ import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 
 import { bucketTimeMs, buildBucketIndex } from "./timeBuckets.mjs";
 import { computePlayIntervalMs } from "./slideshowTiming.mjs";
+import { buildPhotoRoute } from "./photoRoute.mjs";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -94,6 +95,27 @@ fetch("photos.json")
       .slice()
       .sort((a, b) => a.timeMs - b.timeMs)
       .map((p, index) => ({ ...p, index }));
+
+    const routeLatLngs = buildPhotoRoute(
+      photosSorted.map((p) => ({
+        timeMs: p.timeMs,
+        latitude: p.marker.getLatLng().lat,
+        longitude: p.marker.getLatLng().lng,
+      }))
+    ).map(([lat, lng]) => [lat, lng]);
+
+    const routeLine = L.polyline(routeLatLngs, {
+      color: "#16a34a",
+      weight: 3,
+      opacity: 0.6,
+    }).addTo(map);
+    routeLine.bindTooltip("Appalachian Trail (photo path)", { sticky: true });
+
+    const progressLine = L.polyline([], {
+      color: "#f59e0b",
+      weight: 4,
+      opacity: 0.9,
+    }).addTo(map);
 
     // Highlight marker for the active slide (stays visible even if multiple markers are shown).
     const highlight = L.circleMarker([0, 0], {
@@ -275,6 +297,9 @@ fetch("photos.json")
         ignoreNextTimeLoad = true;
         map.timeDimension.setCurrentTime(bucketStart);
       }
+
+      // Route progress line: connect photos up to the current slide.
+      progressLine.setLatLngs(photosSorted.slice(0, activeIndex + 1).map((p) => p.marker.getLatLng()));
 
       els.meta.textContent = `${activeIndex + 1} / ${photosSorted.length}`;
       els.image.src = active.url;
