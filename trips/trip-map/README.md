@@ -17,3 +17,4 @@ Then open the URL Vite prints (usually `http://127.0.0.1:5173/`).
 - Time controls:
   - Bottom-left: Leaflet.TimeDimension default timeline.
   - Top-right: Hour/Day bucketing + current bucket count + play/pause with speed.
+  - Gallery: shows photos in the current bucket; click an item to zoom to it and open the popup.

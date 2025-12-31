@@ -70,7 +70,7 @@ fetch("photos.json")
         </div>
       `);
 
-      return { marker, timeMs };
+      return { marker, timeMs, time: p.time, url: p.url, filename: p.filename };
     });
 
     const bounds = L.latLngBounds(photoMarkers.map((p) => p.marker.getLatLng()));
@@ -104,11 +104,12 @@ fetch("photos.json")
 
     const computeBuckets = (mode) => {
       const buckets = new Map();
-      for (const { marker, timeMs } of photoMarkers) {
+      for (const entry of photoMarkers) {
+        const { timeMs } = entry;
         const bucketTimeMs = getBucketTimeMs(timeMs, mode);
-        const markers = buckets.get(bucketTimeMs) ?? [];
-        markers.push(marker);
-        buckets.set(bucketTimeMs, markers);
+        const entries = buckets.get(bucketTimeMs) ?? [];
+        entries.push({ ...entry, bucketTimeMs });
+        buckets.set(bucketTimeMs, entries);
       }
       const availableTimes = Array.from(buckets.keys()).sort((a, b) => a - b);
       return { buckets, availableTimes };
@@ -119,9 +120,9 @@ fetch("photos.json")
 
     const updateClusterForTime = (timeMs) => {
       clusterGroup.clearLayers();
-      const markers = bucketsIndex.buckets.get(timeMs) ?? [];
-      markers.forEach((m) => clusterGroup.addLayer(m));
-      return markers.length;
+      const entries = bucketsIndex.buckets.get(timeMs) ?? [];
+      entries.forEach((e) => clusterGroup.addLayer(e.marker));
+      return entries;
     };
 
     const applyBucketMode = (mode) => {
@@ -175,10 +176,70 @@ fetch("photos.json")
         const label = container.querySelector("#bucket-label");
         const count = container.querySelector("#bucket-count");
 
+        const gallery = document.createElement("div");
+        gallery.id = "bucket-gallery";
+        gallery.className = "mt-2 max-h-64 overflow-auto border-t pt-2";
+        container.appendChild(gallery);
+
+        const renderGallery = (entries) => {
+          gallery.innerHTML = "";
+          if (!entries.length) {
+            const empty = document.createElement("div");
+            empty.className = "text-xs text-slate-600";
+            empty.textContent = "No photos in this bucket";
+            gallery.appendChild(empty);
+            return;
+          }
+
+          const sorted = entries.slice().sort((a, b) => a.timeMs - b.timeMs);
+          for (const entry of sorted) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className =
+              "w-full flex items-center gap-2 text-left py-1.5 px-1 rounded hover:bg-slate-100";
+
+            const img = document.createElement("img");
+            img.src = entry.url;
+            img.alt = entry.filename;
+            img.loading = "lazy";
+            img.className = "w-12 h-12 object-cover rounded";
+
+            const meta = document.createElement("div");
+            meta.className = "min-w-0";
+
+            const title = document.createElement("div");
+            title.className = "text-xs font-medium truncate";
+            title.textContent = entry.filename;
+
+            const subtitle = document.createElement("div");
+            subtitle.className = "text-[11px] text-slate-600";
+            subtitle.textContent = new Date(entry.time).toLocaleString();
+
+            meta.appendChild(title);
+            meta.appendChild(subtitle);
+
+            btn.appendChild(img);
+            btn.appendChild(meta);
+
+            btn.addEventListener("click", () => {
+              if (typeof clusterGroup.zoomToShowLayer === "function") {
+                clusterGroup.zoomToShowLayer(entry.marker, () => entry.marker.openPopup());
+              } else {
+                map.setView(entry.marker.getLatLng(), Math.max(map.getZoom(), 10), { animate: true });
+                entry.marker.openPopup();
+              }
+            });
+
+            gallery.appendChild(btn);
+          }
+        };
+
         const renderSummary = (timeMs) => {
-          const n = updateClusterForTime(timeMs);
+          const entries = updateClusterForTime(timeMs);
+          const n = entries.length;
           label.textContent = formatBucketLabel(timeMs, bucketMode);
           count.textContent = `${n} photo${n === 1 ? "" : "s"}`;
+          renderGallery(entries);
         };
 
         let isPlaying = false;
