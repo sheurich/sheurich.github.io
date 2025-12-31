@@ -16,5 +16,4 @@ Then open the URL Vite prints (usually `http://127.0.0.1:5173/`).
 - Photos without valid GPS + time EXIF data are skipped (they won’t appear on the map).
 - Time controls:
   - Bottom-left: Leaflet.TimeDimension default timeline.
-  - Top-right: Hour/Day bucketing + current bucket count + play/pause with speed.
-  - Gallery: shows photos in the current bucket; click an item to zoom to it and open the popup.
+  - Right sidebar: slideshow that advances photo-by-photo; bucket mode (Hour/Day) controls what markers are shown and what appears in “Current bucket”.

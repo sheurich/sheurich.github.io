@@ -13,6 +13,8 @@ import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import iconUrl from "leaflet/dist/images/marker-icon.png";
 import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 
+import { bucketTimeMs, buildBucketIndex } from "./timeBuckets.mjs";
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl,
@@ -33,6 +35,9 @@ const map = L.map("map", {
   timeDimensionControl: true,
 });
 
+// Flex layouts can cause Leaflet to measure before final sizing; re-check once.
+setTimeout(() => map.invalidateSize(), 0);
+
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   maxZoom: 19,
@@ -46,6 +51,12 @@ map.addLayer(clusterGroup);
 fetch("photos.json")
   .then((res) => res.json())
   .then((photos) => {
+    const sidebar = document.getElementById("sidebar");
+    if (!sidebar) {
+      console.error("Missing #sidebar element (see index.html)");
+      return;
+    }
+
     const validPhotos = photos.filter((p) => {
       const latitude = Number(p.latitude);
       const longitude = Number(p.longitude);
@@ -64,7 +75,7 @@ fetch("photos.json")
         <div>
           <img src="${p.url}"
                alt="${p.filename}"
-               style="max-width:320px; max-height:240px; width:auto; height:auto; display:block"/>
+               style="max-width:420px; max-height:320px; width:auto; height:auto; display:block"/>
           <br/>
           ${new Date(p.time).toLocaleString()}
         </div>
@@ -78,14 +89,52 @@ fetch("photos.json")
       map.fitBounds(bounds.pad(0.1));
     }
 
-    const BUCKET_MS_BY_MODE = {
-      hour: 60 * 60 * 1000,
-      day: 24 * 60 * 60 * 1000,
+    const photosSorted = photoMarkers
+      .slice()
+      .sort((a, b) => a.timeMs - b.timeMs)
+      .map((p, index) => ({ ...p, index }));
+
+    // Highlight marker for the active slide (stays visible even if multiple markers are shown).
+    const highlight = L.circleMarker([0, 0], {
+      radius: 10,
+      color: "#f59e0b",
+      weight: 3,
+      fillColor: "#fbbf24",
+      fillOpacity: 0.35,
+    }).addTo(map);
+
+    let bucketMode = "day";
+    let bucketsIndex = buildBucketIndex(photosSorted, bucketMode);
+    for (const entries of bucketsIndex.buckets.values()) {
+      entries.sort((a, b) => a.timeMs - b.timeMs);
+    }
+
+    const updateClusterForBucket = (bucketStartTimeMs) => {
+      clusterGroup.clearLayers();
+      const entries = bucketsIndex.buckets.get(bucketStartTimeMs) ?? [];
+      entries.forEach((e) => clusterGroup.addLayer(e.marker));
+      return entries;
     };
 
-    const formatBucketLabel = (bucketTimeMs, mode) => {
-      const start = new Date(bucketTimeMs);
-      const end = new Date(bucketTimeMs + BUCKET_MS_BY_MODE[mode]);
+    let ignoreNextTimeLoad = false;
+    let activeIndex = 0;
+
+    const applyBucketMode = (mode) => {
+      bucketMode = mode;
+      bucketsIndex = buildBucketIndex(photosSorted, bucketMode);
+      for (const entries of bucketsIndex.buckets.values()) {
+        entries.sort((a, b) => a.timeMs - b.timeMs);
+      }
+      map.timeDimension.setAvailableTimes(bucketsIndex.availableTimes, "replace");
+
+      const active = photosSorted[activeIndex];
+      const bucket = bucketTimeMs(active.timeMs, bucketMode);
+      ignoreNextTimeLoad = true;
+      map.timeDimension.setCurrentTime(bucket);
+    };
+
+    const formatBucketLabel = (bucketStartTimeMs, mode) => {
+      const start = new Date(bucketStartTimeMs);
       if (mode === "hour") {
         return start.toLocaleString(undefined, {
           year: "numeric",
@@ -94,208 +143,194 @@ fetch("photos.json")
           hour: "numeric",
         });
       }
-      return `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`;
+      return start.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
     };
 
-    const getBucketTimeMs = (timeMs, mode) => {
-      const bucketMs = BUCKET_MS_BY_MODE[mode];
-      return Math.floor(timeMs / bucketMs) * bucketMs;
-    };
-
-    const computeBuckets = (mode) => {
-      const buckets = new Map();
-      for (const entry of photoMarkers) {
-        const { timeMs } = entry;
-        const bucketTimeMs = getBucketTimeMs(timeMs, mode);
-        const entries = buckets.get(bucketTimeMs) ?? [];
-        entries.push({ ...entry, bucketTimeMs });
-        buckets.set(bucketTimeMs, entries);
-      }
-      const availableTimes = Array.from(buckets.keys()).sort((a, b) => a - b);
-      return { buckets, availableTimes };
-    };
-
-    let bucketMode = "hour";
-    let bucketsIndex = computeBuckets(bucketMode);
-
-    const updateClusterForTime = (timeMs) => {
-      clusterGroup.clearLayers();
-      const entries = bucketsIndex.buckets.get(timeMs) ?? [];
-      entries.forEach((e) => clusterGroup.addLayer(e.marker));
-      return entries;
-    };
-
-    const applyBucketMode = (mode) => {
-      bucketMode = mode;
-      bucketsIndex = computeBuckets(bucketMode);
-      map.timeDimension.setAvailableTimes(bucketsIndex.availableTimes, "replace");
-      map.timeDimension.setCurrentTime(bucketsIndex.availableTimes[0]);
-    };
-
-    // UI: bucket selector + summary
-    const TimeUxControl = L.Control.extend({
-      options: { position: "topright" },
-      onAdd() {
-        const container = L.DomUtil.create(
-          "div",
-          "leaflet-bar bg-white/90 backdrop-blur px-3 py-2 text-sm shadow w-80"
-        );
-
-        container.innerHTML = `
+    sidebar.innerHTML = `
+      <div class="p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-lg font-semibold leading-tight">Slideshow</div>
+            <div id="slide-meta" class="text-xs text-slate-600 mt-1"></div>
+          </div>
           <div class="flex items-center gap-2">
-            <label class="font-medium">Bucket</label>
+            <label class="text-xs text-slate-600">Bucket</label>
             <select id="bucket-mode" class="border rounded px-2 py-1 text-sm">
-              <option value="hour" selected>Hour</option>
-              <option value="day">Day</option>
+              <option value="hour">Hour</option>
+              <option value="day" selected>Day</option>
             </select>
           </div>
-          <div class="mt-2 flex items-center gap-2">
-            <button id="play-toggle" class="border rounded px-2 py-1 text-sm">
-              Play
-            </button>
+        </div>
+
+        <div class="mt-3 flex items-center gap-2">
+          <button id="prev" class="border rounded px-3 py-1.5 text-sm">Prev</button>
+          <button id="play" class="border rounded px-3 py-1.5 text-sm">Play</button>
+          <button id="next" class="border rounded px-3 py-1.5 text-sm">Next</button>
+          <div class="flex items-center gap-2 ml-auto">
             <label class="text-xs text-slate-600">Speed</label>
-            <select id="play-speed" class="border rounded px-2 py-1 text-sm">
+            <select id="speed" class="border rounded px-2 py-1 text-sm">
               <option value="1" selected>1×</option>
               <option value="2">2×</option>
               <option value="4">4×</option>
               <option value="8">8×</option>
             </select>
           </div>
-          <div class="mt-2 text-xs text-slate-700">
-            <div id="bucket-label"></div>
-            <div id="bucket-count" class="mt-0.5"></div>
+        </div>
+
+        <div class="mt-4">
+          <img id="slide-image" class="w-full rounded border bg-slate-50" alt="" />
+          <div id="slide-caption" class="text-sm mt-2"></div>
+        </div>
+
+        <div class="mt-4 border-t pt-3">
+          <div class="flex items-baseline justify-between">
+            <div class="text-sm font-medium">Current bucket</div>
+            <div id="bucket-summary" class="text-xs text-slate-600"></div>
+          </div>
+          <div id="bucket-gallery" class="mt-2 grid grid-cols-2 gap-2"></div>
+        </div>
+      </div>
+    `;
+
+    const els = {
+      meta: sidebar.querySelector("#slide-meta"),
+      bucketMode: sidebar.querySelector("#bucket-mode"),
+      prev: sidebar.querySelector("#prev"),
+      play: sidebar.querySelector("#play"),
+      next: sidebar.querySelector("#next"),
+      speed: sidebar.querySelector("#speed"),
+      image: sidebar.querySelector("#slide-image"),
+      caption: sidebar.querySelector("#slide-caption"),
+      bucketSummary: sidebar.querySelector("#bucket-summary"),
+      gallery: sidebar.querySelector("#bucket-gallery"),
+    };
+
+    L.DomEvent.disableClickPropagation(sidebar);
+    L.DomEvent.disableScrollPropagation(sidebar);
+
+    const focusOnPhoto = (photo, { openPopup = false } = {}) => {
+      highlight.setLatLng(photo.marker.getLatLng());
+      const zoomToShow = () => {
+        if (openPopup) photo.marker.openPopup();
+      };
+      if (typeof clusterGroup.zoomToShowLayer === "function") {
+        clusterGroup.zoomToShowLayer(photo.marker, zoomToShow);
+      } else {
+        map.panTo(photo.marker.getLatLng(), { animate: true });
+        zoomToShow();
+      }
+    };
+
+    const renderBucketGallery = (bucketStartTimeMs, bucketEntries) => {
+      els.bucketSummary.textContent = `${formatBucketLabel(bucketStartTimeMs, bucketMode)} • ${
+        bucketEntries.length
+      } photo${bucketEntries.length === 1 ? "" : "s"}`;
+
+      els.gallery.innerHTML = "";
+      for (const entry of bucketEntries) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+          "border rounded overflow-hidden bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400";
+        if (entry.index === activeIndex) {
+          btn.className += " ring-2 ring-amber-400";
+        }
+
+        btn.innerHTML = `
+          <img src="${entry.url}" alt="${entry.filename}" class="w-full h-28 object-cover" loading="lazy" />
+          <div class="p-2">
+            <div class="text-xs font-medium truncate">${entry.filename}</div>
+            <div class="text-[11px] text-slate-600 mt-0.5">${new Date(entry.time).toLocaleString()}</div>
           </div>
         `;
 
-        L.DomEvent.disableClickPropagation(container);
-        L.DomEvent.disableScrollPropagation(container);
-
-        const select = container.querySelector("#bucket-mode");
-        const playToggle = container.querySelector("#play-toggle");
-        const playSpeed = container.querySelector("#play-speed");
-        const label = container.querySelector("#bucket-label");
-        const count = container.querySelector("#bucket-count");
-
-        const gallery = document.createElement("div");
-        gallery.id = "bucket-gallery";
-        gallery.className = "mt-2 max-h-64 overflow-auto border-t pt-2";
-        container.appendChild(gallery);
-
-        const renderGallery = (entries) => {
-          gallery.innerHTML = "";
-          if (!entries.length) {
-            const empty = document.createElement("div");
-            empty.className = "text-xs text-slate-600";
-            empty.textContent = "No photos in this bucket";
-            gallery.appendChild(empty);
-            return;
-          }
-
-          const sorted = entries.slice().sort((a, b) => a.timeMs - b.timeMs);
-          for (const entry of sorted) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className =
-              "w-full flex items-center gap-3 text-left py-2 px-1 rounded hover:bg-slate-100";
-
-            const img = document.createElement("img");
-            img.src = entry.url;
-            img.alt = entry.filename;
-            img.loading = "lazy";
-            img.className = "w-20 h-20 object-cover rounded flex-shrink-0";
-
-            const meta = document.createElement("div");
-            meta.className = "min-w-0";
-
-            const title = document.createElement("div");
-            title.className = "text-xs font-medium truncate";
-            title.textContent = entry.filename;
-
-            const subtitle = document.createElement("div");
-            subtitle.className = "text-[11px] text-slate-600";
-            subtitle.textContent = new Date(entry.time).toLocaleString();
-
-            meta.appendChild(title);
-            meta.appendChild(subtitle);
-
-            btn.appendChild(img);
-            btn.appendChild(meta);
-
-            btn.addEventListener("click", () => {
-              if (typeof clusterGroup.zoomToShowLayer === "function") {
-                clusterGroup.zoomToShowLayer(entry.marker, () => entry.marker.openPopup());
-              } else {
-                map.setView(entry.marker.getLatLng(), Math.max(map.getZoom(), 10), { animate: true });
-                entry.marker.openPopup();
-              }
-            });
-
-            gallery.appendChild(btn);
-          }
-        };
-
-        const renderSummary = (timeMs) => {
-          const entries = updateClusterForTime(timeMs);
-          const n = entries.length;
-          label.textContent = formatBucketLabel(timeMs, bucketMode);
-          count.textContent = `${n} photo${n === 1 ? "" : "s"}`;
-          renderGallery(entries);
-        };
-
-        let isPlaying = false;
-        let intervalId = null;
-
-        const stop = () => {
-          isPlaying = false;
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
-          }
-          playToggle.textContent = "Play";
-        };
-
-        const start = () => {
-          stop();
-          isPlaying = true;
-          playToggle.textContent = "Pause";
-
-          const stepsPerSecond = Number(playSpeed.value) || 1;
-          const intervalMs = Math.max(1000 / stepsPerSecond, 50);
-
-          intervalId = setInterval(() => {
-            if (map.timeDimension.isLoading()) return;
-            map.timeDimension.nextTime(1, true);
-          }, intervalMs);
-        };
-
-        select.addEventListener("change", (e) => {
-          applyBucketMode(e.target.value);
-          renderSummary(map.timeDimension.getCurrentTime());
+        btn.addEventListener("click", () => {
+          setActiveIndex(entry.index, { openPopup: true });
         });
 
-        playToggle.addEventListener("click", () => {
-          if (isPlaying) stop();
-          else start();
-        });
+        els.gallery.appendChild(btn);
+      }
+    };
 
-        playSpeed.addEventListener("change", () => {
-          if (isPlaying) start();
-        });
+    const renderActive = ({ openPopup = false } = {}) => {
+      const active = photosSorted[activeIndex];
+      const bucketStart = bucketTimeMs(active.timeMs, bucketMode);
+      const bucketEntries = bucketsIndex.buckets.get(bucketStart) ?? [];
+      updateClusterForBucket(bucketStart);
 
-        map.timeDimension.on("timeload", (e) => renderSummary(e.time));
+      if (map.timeDimension.getCurrentTime() !== bucketStart) {
+        ignoreNextTimeLoad = true;
+        map.timeDimension.setCurrentTime(bucketStart);
+      }
 
-        // initial
-        setTimeout(() => renderSummary(map.timeDimension.getCurrentTime()), 0);
+      els.meta.textContent = `${activeIndex + 1} / ${photosSorted.length}`;
+      els.image.src = active.url;
+      els.image.alt = active.filename;
+      els.caption.innerHTML = `
+        <div class="font-medium">${active.filename}</div>
+        <div class="text-xs text-slate-600 mt-0.5">${new Date(active.time).toLocaleString()}</div>
+      `;
 
-        return container;
-      },
+      renderBucketGallery(bucketStart, bucketEntries);
+      focusOnPhoto(active, { openPopup });
+    };
+
+    const setActiveIndex = (index, opts) => {
+      const next = Math.min(Math.max(index, 0), photosSorted.length - 1);
+      activeIndex = next;
+      renderActive(opts);
+    };
+
+    // TimeDimension → slideshow sync (scrubbing the bottom-left control)
+    map.timeDimension.on("timeload", (e) => {
+      if (ignoreNextTimeLoad) {
+        ignoreNextTimeLoad = false;
+        return;
+      }
+      const bucketEntries = bucketsIndex.buckets.get(e.time) ?? [];
+      if (bucketEntries.length > 0) {
+        setActiveIndex(bucketEntries[0].index);
+      }
     });
 
-    map.addControl(new TimeUxControl());
+    // Slideshow controls
+    let isPlaying = false;
+    let playIntervalId = null;
 
-    applyBucketMode(bucketMode);
+    const stop = () => {
+      isPlaying = false;
+      if (playIntervalId) clearInterval(playIntervalId);
+      playIntervalId = null;
+      els.play.textContent = "Play";
+    };
 
-    // Render initial bucket so the time controls visibly affect the map.
-    updateClusterForTime(bucketsIndex.availableTimes[0]);
+    const start = () => {
+      stop();
+      isPlaying = true;
+      els.play.textContent = "Pause";
+      const photosPerSecond = Number(els.speed.value) || 1;
+      const intervalMs = Math.max(1000 / photosPerSecond, 150);
+      playIntervalId = setInterval(() => {
+        setActiveIndex((activeIndex + 1) % photosSorted.length);
+      }, intervalMs);
+    };
+
+    els.prev.addEventListener("click", () => setActiveIndex((activeIndex - 1 + photosSorted.length) % photosSorted.length));
+    els.next.addEventListener("click", () => setActiveIndex((activeIndex + 1) % photosSorted.length));
+    els.play.addEventListener("click", () => (isPlaying ? stop() : start()));
+    els.speed.addEventListener("change", () => {
+      if (isPlaying) start();
+    });
+
+    els.bucketMode.addEventListener("change", (e) => {
+      applyBucketMode(e.target.value);
+      renderActive();
+    });
+
+    // Initial setup
+    map.timeDimension.setAvailableTimes(bucketsIndex.availableTimes, "replace");
+    ignoreNextTimeLoad = true;
+    map.timeDimension.setCurrentTime(bucketTimeMs(photosSorted[0].timeMs, bucketMode));
+    renderActive();
   })
   .catch((err) => console.error("Failed to load photos.json:", err));

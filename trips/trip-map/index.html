@@ -8,8 +8,14 @@
 </head>
 
 <body class="m-0 p-0">
-    <!-- Map container -->
-    <div id="map" class="w-full h-screen"></div>
+    <div class="flex w-full h-screen">
+        <!-- Map container -->
+        <div id="map" class="flex-1 h-full"></div>
+
+        <!-- Slideshow sidebar -->
+        <aside id="sidebar" class="w-[35%] max-w-[560px] min-w-[380px] h-full border-l bg-white overflow-y-auto">
+        </aside>
+    </div>
 
     <!-- Application code -->
     <script type="module" src="./map.js"></script>
