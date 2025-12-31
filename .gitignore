@@ -23,6 +23,9 @@ pnpm-debug.log*
 # VS Code
 .vscode/
 
+# Local scratch
+TODO.md
+
 # Jekyll (if your site uses Jekyll)
 _site/
 .sass-cache/

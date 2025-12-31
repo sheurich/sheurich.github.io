@@ -4,9 +4,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "prepare": "husky install",
     "gen-manifest": "node scripts/generate-photos.js",
-    "dev": "vite",
+    "dev": "npm run gen-manifest && vite",
     "build": "npm run gen-manifest && vite build",
     "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -29,7 +28,7 @@
     "exifr": "^7.0.0",
     "leaflet": "^1.9.0",
     "leaflet-timedimension": "^1.1.0",
-    "leaflet-markercluster": "^1.5.0"
+    "leaflet.markercluster": "^1.5.3"
   },
   "lint-staged": {
     "*.js": [

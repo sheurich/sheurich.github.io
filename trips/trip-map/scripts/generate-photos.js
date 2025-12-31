@@ -38,13 +38,19 @@ async function main() {
   // filter out failures and build output array
   const out = results
     .filter((r) => !r.error)
-    .map(({ fileName, latitude, longitude, time }) => ({
-      filename: fileName,
-      url: `photos/${fileName}`,
-      latitude,
-      longitude,
-      time,
-    }));
+    .map(({ fileName, latitude, longitude, time }) => {
+      const lat = Number(latitude);
+      const lng = Number(longitude);
+      const timeMs = Date.parse(time);
+      return {
+        filename: fileName,
+        url: `photos/${fileName}`,
+        latitude: Number.isFinite(lat) ? lat : undefined,
+        longitude: Number.isFinite(lng) ? lng : undefined,
+        time: Number.isFinite(timeMs) ? new Date(timeMs).toISOString() : undefined,
+      };
+    })
+    .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && !!p.time);
 
   const dest = path.join(__dirname, "../photos.json");
   await fs.writeFile(dest, JSON.stringify(out, null, 2));

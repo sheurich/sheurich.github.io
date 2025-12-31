@@ -7,11 +7,19 @@ const exifr = require("exifr");
   try {
     const { filePath, fileName } = workerData;
     const data = await exifr.parse(filePath, { gps: true, exif: true });
+
+    const timeValue =
+      data?.DateTimeOriginal ?? data?.CreateDate ?? data?.ModifyDate ?? data?.DateTime;
+    const time = new Date(timeValue);
+    if (!Number.isFinite(time.getTime())) {
+      throw new Error("No valid EXIF time found");
+    }
+
     parentPort.postMessage({
       fileName,
       latitude: data.latitude,
       longitude: data.longitude,
-      time: new Date(data.DateTimeOriginal).toISOString(),
+      time: time.toISOString(),
     });
   } catch (err) {
     parentPort.postMessage({
