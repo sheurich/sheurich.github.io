@@ -16,6 +16,7 @@ import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 import { bucketTimeMs, buildBucketIndex } from "./timeBuckets.mjs";
 import { computePlayIntervalMs } from "./slideshowTiming.mjs";
 import { buildPhotoRoute } from "./photoRoute.mjs";
+import { formatLatLng, pickLocationName } from "./locationName.mjs";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -201,9 +202,12 @@ fetch("photos.json")
         </div>
 
         <div class="mt-4">
-          <div class="w-full h-40 rounded border bg-slate-50" id="detail-map" aria-label="Zoomed-in map"></div>
-          <img id="slide-image" class="w-full rounded border bg-slate-50 object-contain max-h-[560px] mt-3" alt="" />
-          <div id="slide-caption" class="text-sm mt-2"></div>
+          <div id="slide-wherewhen" class="mb-2">
+            <div id="slide-location" class="text-base font-semibold leading-tight"></div>
+            <div id="slide-time" class="text-xs text-slate-600 mt-0.5"></div>
+          </div>
+          <div class="w-full h-28 rounded border bg-slate-50" id="detail-map" aria-label="Zoomed-in map"></div>
+          <img id="slide-image" class="w-full rounded border bg-slate-50 object-contain max-h-[680px] mt-3" alt="" />
         </div>
 
         <div class="mt-4 border-t pt-3">
@@ -224,8 +228,9 @@ fetch("photos.json")
       next: sidebar.querySelector("#next"),
       speed: sidebar.querySelector("#speed"),
       detailMap: sidebar.querySelector("#detail-map"),
+      location: sidebar.querySelector("#slide-location"),
+      time: sidebar.querySelector("#slide-time"),
       image: sidebar.querySelector("#slide-image"),
-      caption: sidebar.querySelector("#slide-caption"),
       bucketSummary: sidebar.querySelector("#bucket-summary"),
       gallery: sidebar.querySelector("#bucket-gallery"),
     };
@@ -335,13 +340,72 @@ fetch("photos.json")
       els.meta.textContent = `${activeIndex + 1} / ${photosSorted.length}`;
       els.image.src = active.url;
       els.image.alt = active.filename;
-      els.caption.innerHTML = `
-        <div class="font-medium">${active.filename}</div>
-        <div class="text-xs text-slate-600 mt-0.5">${new Date(active.time).toLocaleString()}</div>
-      `;
+      els.time.textContent = new Date(active.time).toLocaleString();
+
+      const latlng = active.marker.getLatLng();
+      const fallback = formatLatLng(latlng.lat, latlng.lng) ?? "";
+      els.location.textContent = fallback || "Unknown location";
 
       renderBucketGallery(bucketStart, bucketEntries);
       focusOnPhoto(active, { openPopup });
+
+      // Best-effort reverse geocode (cached) to display a friendly location name.
+      // This runs client-side and can be throttled/cached by the browser; fallback remains coords.
+      const key = `${latlng.lat.toFixed(4)},${latlng.lng.toFixed(4)}`;
+      const cacheKey = "trip-map:nominatim-cache:v1";
+      let cache = {};
+      try {
+        cache = JSON.parse(localStorage.getItem(cacheKey) || "{}");
+      } catch {
+        cache = {};
+      }
+
+      if (cache[key]) {
+        els.location.textContent = cache[key];
+        return;
+      }
+
+      if (!window.__tripMapNominatim) {
+        window.__tripMapNominatim = { inFlight: null, lastAt: 0 };
+      }
+      const state = window.__tripMapNominatim;
+      if (state.inFlight) state.inFlight.abort();
+      state.inFlight = new AbortController();
+      const signal = state.inFlight.signal;
+
+      const now = Date.now();
+      const waitMs = Math.max(0, 1000 - (now - state.lastAt));
+      setTimeout(async () => {
+        try {
+          state.lastAt = Date.now();
+          const url = new URL("https://nominatim.openstreetmap.org/reverse");
+          url.searchParams.set("format", "jsonv2");
+          url.searchParams.set("lat", String(latlng.lat));
+          url.searchParams.set("lon", String(latlng.lng));
+          url.searchParams.set("zoom", "10");
+          url.searchParams.set("addressdetails", "1");
+
+          const res = await fetch(url, {
+            signal,
+            headers: { Accept: "application/json" },
+          });
+          if (!res.ok) return;
+          const json = await res.json();
+          const name = pickLocationName(json);
+          if (!name) return;
+          cache[key] = name;
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(cache));
+          } catch {
+            // ignore storage quota
+          }
+          if (activeIndex === active.index) {
+            els.location.textContent = name;
+          }
+        } catch (e) {
+          // ignore abort/network failures; keep fallback
+        }
+      }, waitMs);
     };
 
     const setActiveIndex = (index, opts) => {
