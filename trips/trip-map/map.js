@@ -414,18 +414,6 @@ fetch("photos.json")
       renderActive(opts);
     };
 
-    // TimeDimension → slideshow sync (scrubbing the bottom-left control)
-    map.timeDimension.on("timeload", (e) => {
-      if (ignoreNextTimeLoad) {
-        ignoreNextTimeLoad = false;
-        return;
-      }
-      const bucketEntries = bucketsIndex.buckets.get(e.time) ?? [];
-      if (bucketEntries.length > 0) {
-        setActiveIndex(bucketEntries[0].index);
-      }
-    });
-
     // Slideshow controls
     let isPlaying = false;
     let playIntervalId = null;
@@ -457,6 +445,22 @@ fetch("photos.json")
     els.bucketMode.addEventListener("change", (e) => {
       applyBucketMode(e.target.value);
       renderActive();
+    });
+
+    // TimeDimension → slideshow sync (scrubbing the bottom-left control)
+    map.timeDimension.on("timeload", (e) => {
+      if (ignoreNextTimeLoad) {
+        ignoreNextTimeLoad = false;
+        return;
+      }
+
+      // User scrubbed the timeline: stop autoplay so UI doesn’t feel “out of sync”.
+      stop();
+
+      const bucketEntries = bucketsIndex.buckets.get(e.time) ?? [];
+      if (bucketEntries.length > 0) {
+        setActiveIndex(bucketEntries[0].index);
+      }
     });
 
     // Initial setup

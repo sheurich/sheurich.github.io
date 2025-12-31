@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Keep the bottom-left TimeDimension control as a scrubber only.
+   Slideshow playback lives in the sidebar, so hide duplicate transport controls. */
+.leaflet-bar-timecontrol .timecontrol-backward,
+.leaflet-bar-timecontrol .timecontrol-forward,
+.leaflet-bar-timecontrol .timecontrol-stop,
+.leaflet-bar-timecontrol .timecontrol-play,
+.leaflet-bar-timecontrol .timecontrol-speed,
+.leaflet-bar-timecontrol .timecontrol-loop {
+  display: none !important;
+}
