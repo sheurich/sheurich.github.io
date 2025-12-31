@@ -14,6 +14,7 @@ import iconUrl from "leaflet/dist/images/marker-icon.png";
 import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 
 import { bucketTimeMs, buildBucketIndex } from "./timeBuckets.mjs";
+import { computePlayIntervalMs } from "./slideshowTiming.mjs";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -210,15 +211,27 @@ fetch("photos.json")
 
     const focusOnPhoto = (photo, { openPopup = false } = {}) => {
       highlight.setLatLng(photo.marker.getLatLng());
-      const zoomToShow = () => {
-        if (openPopup) photo.marker.openPopup();
-      };
-      if (typeof clusterGroup.zoomToShowLayer === "function") {
-        clusterGroup.zoomToShowLayer(photo.marker, zoomToShow);
-      } else {
-        map.panTo(photo.marker.getLatLng(), { animate: true });
-        zoomToShow();
-      }
+
+      // Keep zoom sticky: pan only, don't auto-zoom to reveal clusters.
+      map.panTo(photo.marker.getLatLng(), { animate: true });
+
+      if (!openPopup) return;
+
+      // Try to reveal marker at the current zoom via spiderfying the visible parent cluster.
+      map.once("moveend", () => {
+        const parent =
+          typeof clusterGroup.getVisibleParent === "function"
+            ? clusterGroup.getVisibleParent(photo.marker)
+            : null;
+
+        if (parent && parent !== photo.marker && typeof parent.spiderfy === "function") {
+          parent.spiderfy();
+          setTimeout(() => photo.marker.openPopup(), 0);
+          return;
+        }
+
+        photo.marker.openPopup();
+      });
     };
 
     const renderBucketGallery = (bucketStartTimeMs, bucketEntries) => {
@@ -308,8 +321,7 @@ fetch("photos.json")
       stop();
       isPlaying = true;
       els.play.textContent = "Pause";
-      const photosPerSecond = Number(els.speed.value) || 1;
-      const intervalMs = Math.max(1000 / photosPerSecond, 150);
+      const intervalMs = computePlayIntervalMs(els.speed.value);
       playIntervalId = setInterval(() => {
         setActiveIndex((activeIndex + 1) % photosSorted.length);
       }, intervalMs);
