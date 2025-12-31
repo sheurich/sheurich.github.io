@@ -201,7 +201,8 @@ fetch("photos.json")
         </div>
 
         <div class="mt-4">
-          <img id="slide-image" class="w-full rounded border bg-slate-50" alt="" />
+          <div class="w-full h-40 rounded border bg-slate-50" id="detail-map" aria-label="Zoomed-in map"></div>
+          <img id="slide-image" class="w-full rounded border bg-slate-50 object-contain max-h-[560px] mt-3" alt="" />
           <div id="slide-caption" class="text-sm mt-2"></div>
         </div>
 
@@ -222,6 +223,7 @@ fetch("photos.json")
       play: sidebar.querySelector("#play"),
       next: sidebar.querySelector("#next"),
       speed: sidebar.querySelector("#speed"),
+      detailMap: sidebar.querySelector("#detail-map"),
       image: sidebar.querySelector("#slide-image"),
       caption: sidebar.querySelector("#slide-caption"),
       bucketSummary: sidebar.querySelector("#bucket-summary"),
@@ -231,11 +233,40 @@ fetch("photos.json")
     L.DomEvent.disableClickPropagation(sidebar);
     L.DomEvent.disableScrollPropagation(sidebar);
 
+    const detailMap = L.map(els.detailMap, {
+      center: [0, 0],
+      zoom: 13,
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      touchZoom: false,
+      tap: false,
+    });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(detailMap);
+    const detailMarker = L.circleMarker([0, 0], {
+      radius: 6,
+      color: "#f59e0b",
+      weight: 3,
+      fillColor: "#fbbf24",
+      fillOpacity: 0.6,
+    }).addTo(detailMap);
+
+    // Sidebar is created dynamically; ensure Leaflet measures the inset correctly.
+    setTimeout(() => detailMap.invalidateSize(), 0);
+
     const focusOnPhoto = (photo, { openPopup = false } = {}) => {
       highlight.setLatLng(photo.marker.getLatLng());
 
       // Keep zoom sticky: pan only, don't auto-zoom to reveal clusters.
       map.panTo(photo.marker.getLatLng(), { animate: true });
+
+      // Keep the inset map centered on the active photo.
+      detailMarker.setLatLng(photo.marker.getLatLng());
+      detailMap.setView(photo.marker.getLatLng(), 13, { animate: false });
 
       if (!openPopup) return;
 
