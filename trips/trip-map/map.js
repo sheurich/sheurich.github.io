@@ -64,7 +64,7 @@ fetch("photos.json")
         <div>
           <img src="${p.url}"
                alt="${p.filename}"
-               style="max-width:150px; height:auto"/>
+               style="max-width:320px; max-height:240px; width:auto; height:auto; display:block"/>
           <br/>
           ${new Date(p.time).toLocaleString()}
         </div>
@@ -138,7 +138,7 @@ fetch("photos.json")
       onAdd() {
         const container = L.DomUtil.create(
           "div",
-          "leaflet-bar bg-white/90 backdrop-blur px-3 py-2 text-sm shadow"
+          "leaflet-bar bg-white/90 backdrop-blur px-3 py-2 text-sm shadow w-80"
         );
 
         container.innerHTML = `
@@ -196,13 +196,13 @@ fetch("photos.json")
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className =
-              "w-full flex items-center gap-2 text-left py-1.5 px-1 rounded hover:bg-slate-100";
+              "w-full flex items-center gap-3 text-left py-2 px-1 rounded hover:bg-slate-100";
 
             const img = document.createElement("img");
             img.src = entry.url;
             img.alt = entry.filename;
             img.loading = "lazy";
-            img.className = "w-12 h-12 object-cover rounded";
+            img.className = "w-20 h-20 object-cover rounded flex-shrink-0";
 
             const meta = document.createElement("div");
             meta.className = "min-w-0";
