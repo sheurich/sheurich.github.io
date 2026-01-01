@@ -33,3 +33,6 @@ _site/
 
 # Coverage reports, test output, etc.
 coverage/
+
+# Git worktrees
+.worktrees/
