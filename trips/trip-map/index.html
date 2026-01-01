@@ -8,14 +8,23 @@
 </head>
 
 <body class="m-0 p-0">
-    <div class="flex w-full h-screen">
+    <div id="app" class="relative flex w-full h-screen overflow-hidden bg-white">
         <!-- Map container -->
-        <div id="map" class="w-[30%] min-w-[320px] h-full"></div>
+        <div id="map" class="flex-1 min-w-0 h-full"></div>
 
         <!-- Slideshow sidebar -->
-        <aside id="sidebar" class="flex-1 h-full border-l bg-white overflow-y-auto">
+        <aside id="sidebar"
+            class="fixed inset-x-0 bottom-0 z-[1300] max-h-[85vh] w-full translate-y-full border-t bg-white shadow-2xl transition-transform duration-200 ease-out overflow-y-auto lg:static lg:z-auto lg:h-full lg:max-h-none lg:w-[480px] lg:translate-y-0 lg:border-l lg:border-t-0 lg:shadow-none">
         </aside>
     </div>
+
+    <!-- Mobile: sidebar backdrop + toggle -->
+    <div id="sidebar-backdrop"
+        class="fixed inset-0 z-[1200] hidden bg-black/30 backdrop-blur-[1px] lg:hidden"></div>
+    <button id="sidebar-toggle" type="button"
+        class="fixed bottom-4 right-4 z-[1250] rounded-full bg-white px-4 py-2 text-sm font-medium shadow-lg ring-1 ring-black/10 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 lg:hidden">
+        Slideshow
+    </button>
 
     <!-- Application code -->
     <script type="module" src="./map.js"></script>
