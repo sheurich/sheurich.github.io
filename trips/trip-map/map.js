@@ -60,6 +60,102 @@ fetch("photos.json")
       return;
     }
 
+    const sidebarToggle = document.getElementById("sidebar-toggle");
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    const desktopMq = window.matchMedia("(min-width: 1024px)");
+
+    let isSheetOpen = false;
+    const setSheetOpen = (open) => {
+      if (desktopMq.matches) {
+        isSheetOpen = false;
+        sidebarBackdrop?.classList.add("hidden");
+        sidebar.setAttribute("aria-hidden", "false");
+        sidebarToggle?.setAttribute("aria-expanded", "false");
+        if (sidebarToggle) sidebarToggle.textContent = "Slideshow";
+        return;
+      }
+
+      isSheetOpen = open;
+      sidebar.classList.toggle("translate-y-full", !open);
+      sidebarBackdrop?.classList.toggle("hidden", !open);
+      sidebar.setAttribute("aria-hidden", String(!open));
+      sidebarToggle?.setAttribute("aria-expanded", String(open));
+      if (sidebarToggle) sidebarToggle.textContent = open ? "Close" : "Slideshow";
+
+      // Best-effort: ensure Leaflet measures correctly after UI changes.
+      setTimeout(() => map.invalidateSize(), 0);
+    };
+
+    const toggleSheet = () => setSheetOpen(!isSheetOpen);
+    const openSheet = () => setSheetOpen(true);
+    const closeSheet = () => setSheetOpen(false);
+
+    sidebarToggle?.addEventListener("click", toggleSheet);
+    sidebarBackdrop?.addEventListener("click", closeSheet);
+    desktopMq.addEventListener("change", () => setSheetOpen(false));
+    setSheetOpen(false);
+
+    const createLightbox = () => {
+      const overlay = document.createElement("div");
+      overlay.id = "photo-lightbox";
+      overlay.className = "fixed inset-0 z-[2000] hidden items-center justify-center bg-black/70 p-4";
+      overlay.setAttribute("aria-hidden", "true");
+      overlay.innerHTML = `
+        <div class="relative w-full max-w-[1200px]">
+          <button id="photo-lightbox-close" type="button"
+            class="absolute -top-2 -right-2 rounded-full bg-white/90 p-2 text-slate-900 shadow ring-1 ring-black/10 hover:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+            aria-label="Close photo">
+            <span aria-hidden="true">×</span>
+          </button>
+          <img id="photo-lightbox-image" class="mx-auto max-h-[90vh] max-w-full w-auto rounded-lg bg-black/10 object-contain shadow-2xl" alt="" />
+          <div id="photo-lightbox-caption" class="mt-2 text-center text-xs text-white/80"></div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const img = overlay.querySelector("#photo-lightbox-image");
+      const caption = overlay.querySelector("#photo-lightbox-caption");
+      const closeBtn = overlay.querySelector("#photo-lightbox-close");
+
+      let open = false;
+      const close = () => {
+        if (!open) return;
+        open = false;
+        overlay.classList.add("hidden");
+        overlay.classList.remove("flex");
+        overlay.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("overflow-hidden");
+      };
+
+      const show = ({ src, alt, captionText }) => {
+        open = true;
+        img.src = src;
+        img.alt = alt || "";
+        caption.textContent = captionText || "";
+        overlay.classList.remove("hidden");
+        overlay.classList.add("flex");
+        overlay.setAttribute("aria-hidden", "false");
+        document.body.classList.add("overflow-hidden");
+      };
+
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) close();
+      });
+      closeBtn.addEventListener("click", close);
+
+      return { show, close, isOpen: () => open };
+    };
+
+    const lightbox = createLightbox();
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (lightbox.isOpen()) {
+        lightbox.close();
+        return;
+      }
+      if (isSheetOpen) closeSheet();
+    });
+
     const validPhotos = photos.filter((p) => {
       const latitude = Number(p.latitude);
       const longitude = Number(p.longitude);
@@ -74,15 +170,7 @@ fetch("photos.json")
 
     const photoMarkers = validPhotos.map((p) => {
       const timeMs = Date.parse(p.time);
-      const marker = L.marker([Number(p.latitude), Number(p.longitude)]).bindPopup(`
-        <div>
-          <img src="${p.url}"
-               alt="${p.filename}"
-               style="max-width:420px; max-height:320px; width:auto; height:auto; display:block"/>
-          <br/>
-          ${new Date(p.time).toLocaleString()}
-        </div>
-      `);
+      const marker = L.marker([Number(p.latitude), Number(p.longitude)]);
 
       return { marker, timeMs, time: p.time, url: p.url, filename: p.filename };
     });
@@ -171,51 +259,76 @@ fetch("photos.json")
     };
 
     sidebar.innerHTML = `
+      <div class="sticky top-0 z-10 border-b bg-white/90 backdrop-blur">
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-base font-semibold leading-tight">Slideshow</div>
+              <div id="slide-meta" class="text-xs text-slate-600 mt-1"></div>
+            </div>
+            <button id="sheet-close" type="button"
+              class="rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400 lg:hidden"
+              aria-label="Close panel">
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-slate-600">Bucket</span>
+              <select id="bucket-mode"
+                class="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="hour">Hour</option>
+                <option value="day" selected>Day</option>
+              </select>
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-slate-600">Speed</span>
+              <select id="speed"
+                class="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+                <option value="8">8×</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="mt-3 flex items-center gap-2">
+            <button id="prev"
+              class="flex-1 h-10 rounded-md border border-slate-200 bg-white text-sm font-medium shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              Prev
+            </button>
+            <button id="play"
+              class="flex-1 h-10 rounded-md bg-slate-900 text-white text-sm font-medium shadow-sm hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              Play
+            </button>
+            <button id="next"
+              class="flex-1 h-10 rounded-md border border-slate-200 bg-white text-sm font-medium shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="p-4">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="text-lg font-semibold leading-tight">Slideshow</div>
-            <div id="slide-meta" class="text-xs text-slate-600 mt-1"></div>
-          </div>
-          <div class="flex items-center gap-2">
-            <label class="text-xs text-slate-600">Bucket</label>
-            <select id="bucket-mode" class="border rounded px-2 py-1 text-sm">
-              <option value="hour">Hour</option>
-              <option value="day" selected>Day</option>
-            </select>
-          </div>
+        <div>
+          <div id="slide-location" class="text-base font-semibold leading-tight"></div>
+          <div id="slide-time" class="text-xs text-slate-600 mt-0.5"></div>
         </div>
 
-        <div class="mt-3 flex items-center gap-2">
-          <button id="prev" class="border rounded px-3 py-1.5 text-sm">Prev</button>
-          <button id="play" class="border rounded px-3 py-1.5 text-sm">Play</button>
-          <button id="next" class="border rounded px-3 py-1.5 text-sm">Next</button>
-          <div class="flex items-center gap-2 ml-auto">
-            <label class="text-xs text-slate-600">Speed</label>
-            <select id="speed" class="border rounded px-2 py-1 text-sm">
-              <option value="1" selected>1×</option>
-              <option value="2">2×</option>
-              <option value="4">4×</option>
-              <option value="8">8×</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="mt-4">
-          <div id="slide-wherewhen" class="mb-2">
-            <div id="slide-location" class="text-base font-semibold leading-tight"></div>
-            <div id="slide-time" class="text-xs text-slate-600 mt-0.5"></div>
-          </div>
-          <div class="w-full h-28 rounded border bg-slate-50" id="detail-map" aria-label="Zoomed-in map"></div>
-          <img id="slide-image" class="w-full rounded border bg-slate-50 object-contain max-h-[680px] mt-3" alt="" />
-        </div>
+        <button id="slide-image-button" type="button"
+          class="mt-3 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label="Open photo">
+          <img id="slide-image" class="block w-full max-h-[62vh] object-contain" alt="" />
+        </button>
 
         <div class="mt-4 border-t pt-3">
-          <div class="flex items-baseline justify-between">
+          <div class="flex items-baseline justify-between gap-3">
             <div class="text-sm font-medium">Current bucket</div>
-            <div id="bucket-summary" class="text-xs text-slate-600"></div>
+            <div id="bucket-summary" class="text-xs text-slate-600 text-right"></div>
           </div>
-          <div id="bucket-gallery" class="mt-2 grid grid-cols-2 gap-2"></div>
+          <div id="bucket-gallery" class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3"></div>
         </div>
       </div>
     `;
@@ -227,69 +340,34 @@ fetch("photos.json")
       play: sidebar.querySelector("#play"),
       next: sidebar.querySelector("#next"),
       speed: sidebar.querySelector("#speed"),
-      detailMap: sidebar.querySelector("#detail-map"),
       location: sidebar.querySelector("#slide-location"),
       time: sidebar.querySelector("#slide-time"),
+      imageButton: sidebar.querySelector("#slide-image-button"),
       image: sidebar.querySelector("#slide-image"),
       bucketSummary: sidebar.querySelector("#bucket-summary"),
       gallery: sidebar.querySelector("#bucket-gallery"),
+      sheetClose: sidebar.querySelector("#sheet-close"),
     };
 
     L.DomEvent.disableClickPropagation(sidebar);
     L.DomEvent.disableScrollPropagation(sidebar);
 
-    const detailMap = L.map(els.detailMap, {
-      center: [0, 0],
-      zoom: 13,
-      zoomControl: false,
-      attributionControl: false,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      touchZoom: false,
-      tap: false,
+    els.sheetClose?.addEventListener("click", closeSheet);
+
+    els.imageButton?.addEventListener("click", () => {
+      const active = photosSorted[activeIndex];
+      lightbox.show({
+        src: active.url,
+        alt: active.filename,
+        captionText: `${els.location.textContent || active.filename} • ${els.time.textContent || ""}`.trim(),
+      });
     });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(detailMap);
-    const detailMarker = L.circleMarker([0, 0], {
-      radius: 6,
-      color: "#f59e0b",
-      weight: 3,
-      fillColor: "#fbbf24",
-      fillOpacity: 0.6,
-    }).addTo(detailMap);
 
-    // Sidebar is created dynamically; ensure Leaflet measures the inset correctly.
-    setTimeout(() => detailMap.invalidateSize(), 0);
-
-    const focusOnPhoto = (photo, { openPopup = false } = {}) => {
+    const focusOnPhoto = (photo) => {
       highlight.setLatLng(photo.marker.getLatLng());
 
       // Keep zoom sticky: pan only, don't auto-zoom to reveal clusters.
       map.panTo(photo.marker.getLatLng(), { animate: true });
-
-      // Keep the inset map centered on the active photo.
-      detailMarker.setLatLng(photo.marker.getLatLng());
-      detailMap.setView(photo.marker.getLatLng(), 13, { animate: false });
-
-      if (!openPopup) return;
-
-      // Try to reveal marker at the current zoom via spiderfying the visible parent cluster.
-      map.once("moveend", () => {
-        const parent =
-          typeof clusterGroup.getVisibleParent === "function"
-            ? clusterGroup.getVisibleParent(photo.marker)
-            : null;
-
-        if (parent && parent !== photo.marker && typeof parent.spiderfy === "function") {
-          parent.spiderfy();
-          setTimeout(() => photo.marker.openPopup(), 0);
-          return;
-        }
-
-        photo.marker.openPopup();
-      });
     };
 
     const renderBucketGallery = (bucketStartTimeMs, bucketEntries) => {
@@ -302,28 +380,30 @@ fetch("photos.json")
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className =
-          "border rounded overflow-hidden bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400";
+          "group relative overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-400";
+        btn.title = `${entry.filename} • ${new Date(entry.time).toLocaleString()}`;
         if (entry.index === activeIndex) {
-          btn.className += " ring-2 ring-amber-400";
+          btn.className += " ring-2 ring-amber-400 border-amber-300";
         }
 
         btn.innerHTML = `
-          <img src="${entry.url}" alt="${entry.filename}" class="w-full h-28 object-cover" loading="lazy" />
-          <div class="p-2">
-            <div class="text-xs font-medium truncate">${entry.filename}</div>
-            <div class="text-[11px] text-slate-600 mt-0.5">${new Date(entry.time).toLocaleString()}</div>
+          <img src="${entry.url}" alt="${entry.filename}" class="h-20 w-full object-cover" loading="lazy" />
+          <div class="absolute inset-x-0 bottom-0 bg-black/45 px-1 py-0.5 text-[10px] text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
+            ${new Date(entry.time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
           </div>
         `;
 
         btn.addEventListener("click", () => {
-          setActiveIndex(entry.index, { openPopup: true });
+          stop();
+          openSheet();
+          setActiveIndex(entry.index);
         });
 
         els.gallery.appendChild(btn);
       }
     };
 
-    const renderActive = ({ openPopup = false } = {}) => {
+    const renderActive = () => {
       const active = photosSorted[activeIndex];
       const bucketStart = bucketTimeMs(active.timeMs, bucketMode);
       const bucketEntries = bucketsIndex.buckets.get(bucketStart) ?? [];
@@ -347,7 +427,7 @@ fetch("photos.json")
       els.location.textContent = fallback || "Unknown location";
 
       renderBucketGallery(bucketStart, bucketEntries);
-      focusOnPhoto(active, { openPopup });
+      focusOnPhoto(active);
 
       // Best-effort reverse geocode (cached) to display a friendly location name.
       // This runs client-side and can be throttled/cached by the browser; fallback remains coords.
@@ -408,10 +488,10 @@ fetch("photos.json")
       }, waitMs);
     };
 
-    const setActiveIndex = (index, opts) => {
+    const setActiveIndex = (index) => {
       const next = Math.min(Math.max(index, 0), photosSorted.length - 1);
       activeIndex = next;
-      renderActive(opts);
+      renderActive();
     };
 
     // Slideshow controls
@@ -446,6 +526,20 @@ fetch("photos.json")
       applyBucketMode(e.target.value);
       renderActive();
     });
+
+    // Marker click selects the *bucket* (not a specific photo).
+    for (const entry of photosSorted) {
+      entry.marker.on("click", () => {
+        stop();
+        openSheet();
+
+        const bucketStart = bucketTimeMs(entry.timeMs, bucketMode);
+        const bucketEntries = bucketsIndex.buckets.get(bucketStart) ?? [];
+        if (bucketEntries.length > 0) {
+          setActiveIndex(bucketEntries[0].index);
+        }
+      });
+    }
 
     // TimeDimension → slideshow sync (scrubbing the bottom-left control)
     map.timeDimension.on("timeload", (e) => {
